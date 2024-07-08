@@ -2,6 +2,7 @@ package com.sheikhimtiaz.views;
 
 
 import com.sheikhimtiaz.views.home.HomeView;
+import com.sheikhimtiaz.views.search.LocationSearchView;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.applayout.DrawerToggle;
@@ -123,7 +124,7 @@ public class MainLayout extends AppLayout {
     private MenuItemInfo[] createMenuItems() {
         return new MenuItemInfo[]{
                 new MenuItemInfo("Home menu", "la la-file", HomeView.class), //
-
+                new MenuItemInfo("Search Location", "la la-search", LocationSearchView.class), //
         };
     }
 
