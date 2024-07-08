@@ -2,11 +2,18 @@ package com.sheikhimtiaz.views.search;
 
 import com.sheikhimtiaz.data.model.Location;
 import com.sheikhimtiaz.data.model.*;
+import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.charts.Chart;
+import com.vaadin.flow.component.charts.model.*;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
 import org.springframework.web.client.RestTemplate;
@@ -48,8 +55,9 @@ public class LocationSearchView extends VerticalLayout {
         Button previousPageButton = new Button("Previous Page", e -> loadPreviousPage());
 
         weatherLayout = new VerticalLayout();
-
-        add(cityNameField, filterTextField, searchButton, grid, previousPageButton, nextPageButton, weatherLayout);
+        HorizontalLayout searchLayout = new HorizontalLayout(cityNameField, searchButton);
+        searchLayout.setAlignItems(Alignment.END);
+        add(searchLayout, grid, previousPageButton, nextPageButton, weatherLayout);
     }
 
     private void showWeather(Location location) {
@@ -68,10 +76,65 @@ public class LocationSearchView extends VerticalLayout {
             dailyGrid.addColumn(WeatherDaily::getTemperatureMin).setHeader("Min Temperature");
             dailyGrid.addSelectionListener(event -> event.getFirstSelectedItem().ifPresent(daily -> showHourlyWeather(weatherData, daily.getDate())));
             weatherLayout.add(dailyGrid);
+            weatherLayout.add(showWeatherCharts(location, weatherData));
         } catch (Exception e) {
             Notification.show("Failed to fetch weather data: " + e.getMessage());
         }
     }
+
+    private Component showWeatherCharts(Location location, WeatherData weatherData) {
+        // Header
+        Select year = new Select();
+        year.setItems(location.getName());
+        year.setValue(location.getName());
+        year.setWidth("100px");
+
+        HorizontalLayout header = createHeader("Charts for weather data", "Next 7 days (location)");
+        header.add(year);
+
+        // Chart
+        Chart chart = new Chart(ChartType.AREA);
+        Configuration conf = chart.getConfiguration();
+
+        XAxis xAxis = new XAxis();
+        xAxis.setCategories("Day 1","Day 2","Day 3","Day 4","Day 5","Day 6","Day 7");
+        conf.addxAxis(xAxis);
+
+        conf.getyAxis().setTitle("Values");
+
+        PlotOptionsArea plotOptions = new PlotOptionsArea();
+        plotOptions.setPointPlacement(PointPlacement.ON);
+        conf.addPlotOptions(plotOptions);
+
+        conf.addSeries(new ListSeries(location.getName(), weatherData.getDailyTemperatureMax().toArray(new Double[0])));
+
+        // Add it all together
+        VerticalLayout viewEvents = new VerticalLayout(header, chart);
+        viewEvents.addClassName("p-l");
+        viewEvents.setPadding(false);
+        viewEvents.setSpacing(false);
+        viewEvents.getElement().getThemeList().add("spacing-l");
+        return viewEvents;
+    }
+
+    private HorizontalLayout createHeader(String title, String subtitle) {
+        H2 h2 = new H2(title);
+        h2.addClassNames("text-xl", "m-0");
+
+        Span span = new Span(subtitle);
+        span.addClassNames("text-secondary", "text-xs");
+
+        VerticalLayout column = new VerticalLayout(h2, span);
+        column.setPadding(false);
+        column.setSpacing(false);
+
+        HorizontalLayout header = new HorizontalLayout(column);
+        header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
+        header.setSpacing(false);
+        header.setWidthFull();
+        return header;
+    }
+
     private void showHourlyWeather(WeatherData weatherData, String date) {
         List<WeatherHourly> hourlyWeatherForDate = weatherData.getHourlyWeatherDataForDate(date);
 
