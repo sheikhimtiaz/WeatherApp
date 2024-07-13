@@ -40,8 +40,9 @@ public class LocationSearchView extends VerticalLayout {
     private int currentPage = 0;
     private final int pageSize = 10;
     private VerticalLayout weatherLayout;
-    LocationService locationService = null;
-    WeatherService weatherService = null;
+    private VerticalLayout hourlyWeatherLayout;
+    LocationService locationService;
+    WeatherService weatherService;
 
     public LocationSearchView(LocationService locationService,
                               WeatherService weatherService) {
@@ -64,9 +65,12 @@ public class LocationSearchView extends VerticalLayout {
         Button previousPageButton = new Button("Previous Page", e -> loadPreviousPage());
 
         weatherLayout = new VerticalLayout();
+        hourlyWeatherLayout = new VerticalLayout();
+
         HorizontalLayout searchLayout = new HorizontalLayout(cityNameField, searchButton);
         searchLayout.setAlignItems(Alignment.END);
-        add(searchLayout, grid, previousPageButton, nextPageButton, weatherLayout);
+        HorizontalLayout hzForPagingButtons = new HorizontalLayout(previousPageButton, nextPageButton);
+        add(searchLayout, grid, hzForPagingButtons, weatherLayout, hourlyWeatherLayout);
     }
 
     private void showWeather(Location location) {
@@ -74,13 +78,19 @@ public class LocationSearchView extends VerticalLayout {
             WeatherData weatherData = weatherService.getWeather(location.getLatitude(), location.getLongitude());
             weatherLayout.removeAll();
             weatherLayout.add(new H2("Weather Forecast for " + location.getName()));
-            // Show daily forecast
+
             Grid<WeatherDaily> dailyGrid = new Grid<>(WeatherDaily.class);
             dailyGrid.setItems(weatherData.getDailyWeatherData());
             dailyGrid.addColumn(WeatherDaily::getDate).setHeader("Date");
             dailyGrid.addColumn(WeatherDaily::getTemperatureMax).setHeader("Max Temperature");
             dailyGrid.addColumn(WeatherDaily::getTemperatureMin).setHeader("Min Temperature");
-            dailyGrid.addSelectionListener(event -> event.getFirstSelectedItem().ifPresent(daily -> showHourlyWeather(weatherData, daily.getDate())));
+            dailyGrid.asSingleSelect().addValueChangeListener(event -> {
+                WeatherDaily selectedDay = event.getValue();
+                if (selectedDay != null) {
+                    showHourlyWeather(location, selectedDay.getDate());
+                }
+            });
+
             weatherLayout.add(dailyGrid);
             weatherLayout.add(showWeatherCharts(location, weatherData));
         } catch (Exception e) {
@@ -89,8 +99,7 @@ public class LocationSearchView extends VerticalLayout {
     }
 
     private Component showWeatherCharts(Location location, WeatherData weatherData) {
-        // Header
-        Select year = new Select();
+        Select<String> year = new Select<>();
         year.setItems(location.getName());
         year.setValue(location.getName());
         year.setWidth("100px");
@@ -98,12 +107,11 @@ public class LocationSearchView extends VerticalLayout {
         HorizontalLayout header = createHeader("Charts for weather data", "Next 7 days (location)");
         header.add(year);
 
-        // Chart
         Chart chart = new Chart(ChartType.AREA);
         Configuration conf = chart.getConfiguration();
 
         XAxis xAxis = new XAxis();
-        xAxis.setCategories("Day 1","Day 2","Day 3","Day 4","Day 5","Day 6","Day 7");
+        xAxis.setCategories("Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7");
         conf.addxAxis(xAxis);
 
         conf.getyAxis().setTitle("Values");
@@ -114,7 +122,6 @@ public class LocationSearchView extends VerticalLayout {
 
         conf.addSeries(new ListSeries(location.getName(), weatherData.getDailyTemperatureMax().toArray(new Double[0])));
 
-        // Add it all together
         VerticalLayout viewEvents = new VerticalLayout(header, chart);
         viewEvents.addClassName("p-l");
         viewEvents.setPadding(false);
@@ -141,16 +148,52 @@ public class LocationSearchView extends VerticalLayout {
         return header;
     }
 
-    private void showHourlyWeather(WeatherData weatherData, String date) {
-        List<WeatherHourly> hourlyWeatherForDate = weatherData.getHourlyWeatherDataForDate(date);
+    private void showHourlyWeather(Location location, String date) {
+        try {
+            hourlyWeatherLayout.removeAll();
+            WeatherData weatherData = weatherService.getWeather(location.getLatitude(), location.getLongitude());
+            List<WeatherHourly> hourlyWeatherForDate = weatherData.getHourlyWeatherDataForDate(date);
 
-        Grid<WeatherHourly> hourlyGrid = new Grid<>(WeatherHourly.class);
-        hourlyGrid.setItems(hourlyWeatherForDate);
-        hourlyGrid.addColumn(WeatherHourly::getTime).setHeader("Time");
-        hourlyGrid.addColumn(WeatherHourly::getTemperature).setHeader("Temperature");
-        hourlyGrid.addColumn(WeatherHourly::getWindspeed).setHeader("Wind Speed");
-        hourlyGrid.addColumn(WeatherHourly::getPrecipitation).setHeader("Precipitation");
-        weatherLayout.add(hourlyGrid);
+            Grid<WeatherHourly> hourlyGrid = new Grid<>(WeatherHourly.class);
+            hourlyGrid.setItems(hourlyWeatherForDate);
+            hourlyGrid.addColumn(WeatherHourly::getTime).setHeader("Time");
+            hourlyGrid.addColumn(WeatherHourly::getTemperature).setHeader("Temperature");
+            hourlyGrid.addColumn(WeatherHourly::getWindspeed).setHeader("Wind Speed");
+            hourlyGrid.addColumn(WeatherHourly::getPrecipitation).setHeader("Precipitation");
+
+            hourlyWeatherLayout.add(hourlyGrid);
+            hourlyWeatherLayout.add(showHourlyWeatherChart(location, hourlyWeatherForDate));
+        } catch (Exception e) {
+            Notification.show("Failed to fetch hourly weather data: " + e.getMessage());
+        }
+    }
+
+    private Component showHourlyWeatherChart(Location location, List<WeatherHourly> hourlyWeather) {
+        HorizontalLayout header = createHeader("Hourly Weather Data", "For selected day");
+
+        Chart chart = new Chart(ChartType.LINE);
+        Configuration conf = chart.getConfiguration();
+
+        XAxis xAxis = new XAxis();
+        xAxis.setCategories(hourlyWeather.stream().map(WeatherHourly::getTime).toArray(String[]::new));
+        conf.addxAxis(xAxis);
+
+        conf.getyAxis().setTitle("Values");
+
+        PlotOptionsLine plotOptions = new PlotOptionsLine();
+        plotOptions.setPointPlacement(PointPlacement.ON);
+        conf.addPlotOptions(plotOptions);
+
+        conf.addSeries(new ListSeries("Temperature", hourlyWeather.stream().map(WeatherHourly::getTemperature).toArray(Double[]::new)));
+        conf.addSeries(new ListSeries("Wind Speed", hourlyWeather.stream().map(WeatherHourly::getWindspeed).toArray(Double[]::new)));
+        conf.addSeries(new ListSeries("Precipitation", hourlyWeather.stream().map(WeatherHourly::getPrecipitation).toArray(Double[]::new)));
+
+        VerticalLayout viewEvents = new VerticalLayout(header, chart);
+        viewEvents.addClassName("p-l");
+        viewEvents.setPadding(false);
+        viewEvents.setSpacing(false);
+        viewEvents.getElement().getThemeList().add("spacing-l");
+        return viewEvents;
     }
 
     private void searchLocations() {
