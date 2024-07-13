@@ -43,6 +43,10 @@ public class SignUpView extends VerticalLayout {
             }
         });
 
-        add(usernameField, passwordField, confirmPasswordField, signUpButton);
+        Button loginButton = new Button("Log In", event -> {
+            getUI().ifPresent(ui -> ui.navigate("login"));
+        });
+
+        add(usernameField, passwordField, confirmPasswordField, signUpButton, loginButton);
     }
 }
