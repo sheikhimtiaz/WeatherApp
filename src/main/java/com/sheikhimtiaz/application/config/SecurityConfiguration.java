@@ -26,7 +26,7 @@ public class SecurityConfiguration extends VaadinWebSecurity {
     UserDetailsManager userDetailsManager(){
         return new InMemoryUserDetailsManager(
                 User.withUsername("marcus")
-                        .password("{noop}marcus")
+                        .password(passwordEncoder().encode("marcus"))
                         .roles("USER").build()
         );
     }
