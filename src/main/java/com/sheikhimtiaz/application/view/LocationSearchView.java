@@ -4,12 +4,14 @@ import com.sheikhimtiaz.application.model.Location;
 import com.sheikhimtiaz.application.model.WeatherDaily;
 import com.sheikhimtiaz.application.model.WeatherData;
 import com.sheikhimtiaz.application.model.WeatherHourly;
+import com.sheikhimtiaz.application.service.FavoriteService;
 import com.sheikhimtiaz.application.service.LocationService;
 import com.sheikhimtiaz.application.service.WeatherService;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.charts.Chart;
 import com.vaadin.flow.component.charts.model.*;
+import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
@@ -19,15 +21,12 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.server.VaadinSession;
 import jakarta.annotation.security.PermitAll;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.security.core.context.SecurityContextHolder;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
-import static com.sheikhimtiaz.application.constant.Constants.APP_BASE_URL;
 
 @Route("search")
 @PermitAll
@@ -43,11 +42,29 @@ public class LocationSearchView extends VerticalLayout {
     private VerticalLayout hourlyWeatherLayout;
     LocationService locationService;
     WeatherService weatherService;
+    private ComboBox<Location> favoriteLocationsComboBox;
+    private Button addToFavoritesButton;
+    FavoriteService favoriteService;
 
     public LocationSearchView(LocationService locationService,
-                              WeatherService weatherService) {
+                              WeatherService weatherService,
+                              FavoriteService favoriteService) {
         this.locationService = locationService;
         this.weatherService = weatherService;
+        this.favoriteService = favoriteService;
+
+        // Header layout with logout button
+        HorizontalLayout headerLayout = new HorizontalLayout();
+        headerLayout.setWidthFull();
+        headerLayout.setJustifyContentMode(JustifyContentMode.END);
+        Button logoutButton = new Button("Log Out", event -> {
+            VaadinSession.getCurrent().getSession().invalidate();
+            SecurityContextHolder.clearContext();
+            getUI().ifPresent(ui -> ui.navigate("login"));
+        });
+        headerLayout.add(logoutButton);
+        add(headerLayout);
+
         cityNameField = new TextField("City Name");
         filterTextField = new TextField("Filter by Location Name");
         searchButton = new Button("Search", e -> searchLocations());
@@ -61,18 +78,47 @@ public class LocationSearchView extends VerticalLayout {
             }
         });
 
+        favoriteLocationsComboBox = new ComboBox<>("Favorite Locations");
+        favoriteLocationsComboBox.setItemLabelGenerator(Location::getName);
+        favoriteLocationsComboBox.addValueChangeListener(event -> {
+            Location selectedLocation = event.getValue();
+            if (selectedLocation != null) {
+                showWeather(selectedLocation);
+            }
+        });
+        addToFavoritesButton = new Button("Add to Favorites", e -> {
+            Location selectedLocation = grid.asSingleSelect().getValue();
+            if (selectedLocation != null) {
+                String userId = getCurrentUserId();
+                favoriteService.addFavorite(userId, selectedLocation);
+                updateFavoriteLocations();
+            }
+        });
+
         Button nextPageButton = new Button("Next Page", e -> loadNextPage());
         Button previousPageButton = new Button("Previous Page", e -> loadPreviousPage());
 
         weatherLayout = new VerticalLayout();
         hourlyWeatherLayout = new VerticalLayout();
 
-        HorizontalLayout searchLayout = new HorizontalLayout(cityNameField, searchButton);
+        HorizontalLayout searchLayout = new HorizontalLayout(cityNameField, searchButton, favoriteLocationsComboBox, addToFavoritesButton);
         searchLayout.setAlignItems(Alignment.END);
         HorizontalLayout hzForPagingButtons = new HorizontalLayout(previousPageButton, nextPageButton);
         add(searchLayout, grid, hzForPagingButtons, weatherLayout, hourlyWeatherLayout);
+        updateFavoriteLocations();
     }
-
+    private void updateFavoriteLocations() {
+        String userId = getCurrentUserId();
+        List<Location> favoriteLocations = favoriteService.getFavorites(userId);
+        favoriteLocationsComboBox.setItems(favoriteLocations);
+    }
+    private String getCurrentUserId() {
+        try {
+            return VaadinSession.getCurrent().getAttribute("username").toString();
+        } catch (Exception e) {
+            return "anonymous";
+        }
+    }
     private void showWeather(Location location) {
         try {
             WeatherData weatherData = weatherService.getWeather(location.getLatitude(), location.getLongitude());
