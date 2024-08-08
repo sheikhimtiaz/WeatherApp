@@ -2,7 +2,7 @@ package com.sheikhimtiaz.application.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sheikhimtiaz.application.model.Location;
+import com.sheikhimtiaz.application.entity.Location;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;

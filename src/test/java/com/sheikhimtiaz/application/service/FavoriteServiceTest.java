@@ -1,19 +1,22 @@
 package com.sheikhimtiaz.application.service;
 
-import com.sheikhimtiaz.application.model.Location;
+import com.sheikhimtiaz.application.entity.Location;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 
 public class FavoriteServiceTest {
 
-    private FavoriteService favoriteService;
+    @Autowired
+    private FavoriteLocationService favoriteService;
 
     @BeforeEach
     void setUp() {
-        favoriteService = new FavoriteService();
+        favoriteService = new FavoriteLocationService();
     }
 
     @Test

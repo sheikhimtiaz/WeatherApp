@@ -1,10 +1,12 @@
 package com.sheikhimtiaz.application.view;
 
-import com.sheikhimtiaz.application.model.Location;
+import com.sheikhimtiaz.application.entity.Location;
 import com.sheikhimtiaz.application.model.WeatherDaily;
 import com.sheikhimtiaz.application.model.WeatherData;
 import com.sheikhimtiaz.application.model.WeatherHourly;
-import com.sheikhimtiaz.application.service.FavoriteService;
+import com.sheikhimtiaz.application.repository.LocationRepository;
+import com.sheikhimtiaz.application.security.AuthenticatedUser;
+import com.sheikhimtiaz.application.service.FavoriteLocationService;
 import com.sheikhimtiaz.application.service.LocationService;
 import com.sheikhimtiaz.application.service.WeatherService;
 import com.vaadin.flow.component.Component;
@@ -23,9 +25,11 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
 import jakarta.annotation.security.PermitAll;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
+import java.util.Optional;
 
 
 @Route("search")
@@ -44,22 +48,29 @@ public class LocationSearchView extends VerticalLayout {
     WeatherService weatherService;
     private ComboBox<Location> favoriteLocationsComboBox;
     private Button addToFavoritesButton;
-    FavoriteService favoriteService;
+    FavoriteLocationService favoriteService;
+    LocationRepository locationRepository;
+    AuthenticatedUser authenticatedUser;
 
     public LocationSearchView(LocationService locationService,
                               WeatherService weatherService,
-                              FavoriteService favoriteService) {
+                              FavoriteLocationService favoriteService,
+                              AuthenticatedUser authenticatedUser,
+                              LocationRepository locationRepository) {
         this.locationService = locationService;
         this.weatherService = weatherService;
         this.favoriteService = favoriteService;
+        this.locationRepository = locationRepository;
+        this.authenticatedUser = authenticatedUser;
 
         // Header layout with logout button
         HorizontalLayout headerLayout = new HorizontalLayout();
         headerLayout.setWidthFull();
         headerLayout.setJustifyContentMode(JustifyContentMode.END);
         Button logoutButton = new Button("Log Out", event -> {
-            VaadinSession.getCurrent().getSession().invalidate();
-            SecurityContextHolder.clearContext();
+//            VaadinSession.getCurrent().getSession().invalidate();
+//            SecurityContextHolder.clearContext();
+            authenticatedUser.logout();
             getUI().ifPresent(ui -> ui.navigate("login"));
         });
         headerLayout.add(logoutButton);
@@ -90,6 +101,11 @@ public class LocationSearchView extends VerticalLayout {
             Location selectedLocation = grid.asSingleSelect().getValue();
             if (selectedLocation != null) {
                 String userId = getCurrentUserId();
+                Optional<Location> existingLocation = locationRepository.findByLatitudeAndLongitude(
+                        selectedLocation.getLatitude(), selectedLocation.getLongitude());
+                if(existingLocation.isEmpty()){
+                    selectedLocation = locationRepository.save(selectedLocation);
+                }
                 favoriteService.addFavorite(userId, selectedLocation);
                 updateFavoriteLocations();
             }
@@ -114,7 +130,9 @@ public class LocationSearchView extends VerticalLayout {
     }
     private String getCurrentUserId() {
         try {
-            return VaadinSession.getCurrent().getAttribute("username").toString();
+            Optional<String> username = authenticatedUser.getUsername();
+            Optional<Long> userId = authenticatedUser.getUserId();
+            return username.orElse("UNKNOWN");
         } catch (Exception e) {
             return "anonymous";
         }
